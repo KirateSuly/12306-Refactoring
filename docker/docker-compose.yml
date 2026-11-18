@@ -1,0 +1,116 @@
+name: index12306
+
+# 用法（在仓库根目录执行）。注意：本机 Docker 没装 compose 插件，要用 docker-compose 这个独立命令：
+#   1) 只起 Redis + RocketMQ + Nacos（MySQL 用你本机的，3306 已被 MySQL80 占用）：
+#        docker-compose -f docker/docker-compose.yml up -d
+#   2) 如果想让容器跑 MySQL（先停掉本机 MySQL80 服务，否则 3306 冲突）：
+#        net stop MySQL80          （管理员 PowerShell）
+#        docker-compose -f docker/docker-compose.yml --profile mysql up -d
+#   3) 看状态：docker-compose -f docker/docker-compose.yml ps
+#   4) 看日志：docker-compose -f docker/docker-compose.yml logs -f rocketmq-broker
+#   5) 全停： docker-compose -f docker/docker-compose.yml --profile mysql down
+
+services:
+  # ---------- 可选：MySQL 8 ----------
+  mysql:
+    image: mysql:8.0.36
+    container_name: 12306-mysql
+    profiles: ["mysql"]
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+      - --max-connections=500
+      - --lower-case-table-names=1
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -proot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # ---------- Redis 7（密码 123456，与 application.yaml 一致） ----------
+  redis:
+    image: redis:7.2-alpine
+    container_name: 12306-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "123456", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a 123456 ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------- RocketMQ 4.9.7 ----------
+  # 注意：官方镜像默认以 uid 3000(rocketmq) 运行，而 Docker 新建的命名卷属于 root，
+  # 非 root 进程无法写 /home/rocketmq/store、/home/rocketmq/logs，
+  # broker 初始化失败后以退出码 253(-3) 退出并被反复重启。这里用 root 运行规避。
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.7
+    container_name: 12306-rmq-namesrv
+    restart: unless-stopped
+    user: root
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    volumes:
+      - rmq-namesrv-logs:/home/rocketmq/logs
+
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.7
+    container_name: 12306-rmq-broker
+    restart: unless-stopped
+    user: root
+    depends_on:
+      - rocketmq-namesrv
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+      - "10912:10912"
+    volumes:
+      - ./broker.conf:/home/rocketmq/conf/broker.conf:ro
+      - rmq-broker-store:/home/rocketmq/store
+      - rmq-broker-logs:/home/rocketmq/logs
+
+  # ---------- Nacos（微服务版才需要；聚合版可以不起） ----------
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: 12306-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      # 关键：镜像自带 JDK 8u372，在 cgroup v2 的 Docker 上会触发
+      # jdk.internal.platform.cgroupv2.CgroupV2Subsystem NPE（JDK-8287073），
+      # Nacos 启动失败并无限重启。关闭容器感知即可绕过。
+      # 必须用 JAVA_OPT（拼在 -jar 之前），JAVA_OPT_EXT 会拼到 -jar 之后，JVM 不识别。
+      JAVA_OPT: "-XX:-UseContainerSupport"
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+      TZ: Asia/Shanghai
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+
+volumes:
+  mysql-data:
+  redis-data:
+  rmq-namesrv-logs:
+  rmq-broker-store:
+  rmq-broker-logs:
