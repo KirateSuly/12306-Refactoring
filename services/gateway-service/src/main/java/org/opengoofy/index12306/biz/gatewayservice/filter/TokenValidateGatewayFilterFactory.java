@@ -78,6 +78,7 @@ public class TokenValidateGatewayFilterFactory extends AbstractGatewayFilterFact
         };
     }
 
+    //表示"需要防护的路径"
     private boolean isPathInBlackPreList(String requestPath, List<String> blackPathPre) {
         if (CollectionUtils.isEmpty(blackPathPre)) {
             return false;

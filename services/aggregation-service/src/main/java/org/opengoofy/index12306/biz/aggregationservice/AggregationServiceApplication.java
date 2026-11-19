@@ -28,6 +28,8 @@ import org.springframework.retry.annotation.EnableRetry;
 /**
  * 12306 聚合服务应用启动器
  */
+
+//开启 Hippo4j 轻量动态线程池能力
 @EnableDynamicThreadPool
 @SpringBootApplication(scanBasePackages = {
         "org.opengoofy.index12306.biz.userservice",
@@ -47,6 +49,7 @@ import org.springframework.retry.annotation.EnableRetry;
         "org.opengoofy.index12306.biz.ticketservice.remote",
         "org.opengoofy.index12306.biz.orderservice.remote"
 })
+//开启 crane4j：按枚举把 code 自动填成中文描述（订单状态、支付渠道之类）。
 @EnableCrane4j(enumPackages = "org.opengoofy.index12306.biz.orderservice.common.enums")
 public class AggregationServiceApplication {
 
