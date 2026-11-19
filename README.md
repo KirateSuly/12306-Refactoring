@@ -111,7 +111,7 @@ docker-compose -f docker/docker-compose.yml up -d
 
 - 包含 Redis（密码 `123456`）、RocketMQ NameServer/Broker、Nacos（standalone）。
 - 如果宿主机 3306 已被本机 MySQL 占用，不要再启动 compose 的 MySQL；确有需要时使用 `--profile mysql`，并先停掉本机 MySQL80 服务。
-- 容器启动参数与踩坑修复都写在 [docs/02-environment.md](docs/02-environment.md)。
+- 容器启动参数与踩坑修复都写在 [docs/02-environment.md](docs/01-environment.md)。
 
 ### 3. 初始化数据库
 
@@ -181,8 +181,8 @@ npm run serve
 
 ## 学习与文档
 
-- [项目结构导读](docs/01-project-structure.md)：模块划分、两种运行模式、下单链路、接口与中间件速查。
-- [环境搭建记录](docs/02-environment.md)：中间件拓扑、已修复的坑、数据库与端口说明。
+- [项目结构导读](docs/02-project-structure.md)：模块划分、两种运行模式、下单链路、接口与中间件速查。
+- [环境搭建记录](docs/01-environment.md)：中间件拓扑、已修复的坑、数据库与端口说明。
 - [项目体检报告](docs/00-health-check.md)：代码规模、技术栈版本、亮点分布与风险清单。
 - [学习计划](docs/plan.md)：按「跑通 → 读链路 → 制造故障 → 改造压测 → 微服务」分阶段推进。
 - [实验记录目录](docs/lab/)：每日实验产出（Day 3 起）。
