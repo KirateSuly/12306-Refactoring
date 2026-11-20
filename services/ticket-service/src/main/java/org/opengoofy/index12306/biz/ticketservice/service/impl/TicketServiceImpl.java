@@ -394,6 +394,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
             scene = IdempotentSceneEnum.RESTAPI,
             type = IdempotentTypeEnum.SPEL
     )
+    //Caffeine 本地细粒度锁+分布式锁Redisson两级
     @Override
     public TicketPurchaseRespDTO purchaseTicketsV2(PurchaseTicketReqDTO requestParam) {
         // 责任链模式，验证 1：参数必填 2：参数正确性 3：乘客是否已买当前车次等...
