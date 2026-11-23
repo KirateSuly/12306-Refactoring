@@ -86,6 +86,7 @@ public final class TicketAvailabilityTokenBucket {
      * @return 是否获取列车车票余量令牌桶中的令牌返回结果
      */
     public TokenResultDTO takeTokenFromBucket(PurchaseTicketReqDTO requestParam) {
+        //（89–97）：拿车次 + 算全线路
         TrainDO trainDO = distributedCache.safeGet(
                 TRAIN_INFO + requestParam.getTrainId(),
                 TrainDO.class,
@@ -94,6 +95,7 @@ public final class TicketAvailabilityTokenBucket {
                 TimeUnit.DAYS);
         List<RouteDTO> routeDTOList = trainStationService
                 .listTrainStationRoute(requestParam.getTrainId(), trainDO.getStartStation(), trainDO.getEndStation());
+        //（99–122）：懒初始化 + 双重检查锁
         StringRedisTemplate stringRedisTemplate = (StringRedisTemplate) distributedCache.getInstance();
         String tokenBucketHashKey = TICKET_AVAILABILITY_TOKEN_BUCKET + requestParam.getTrainId();
         Boolean hasKey = distributedCache.hasKey(tokenBucketHashKey);
@@ -120,12 +122,14 @@ public final class TicketAvailabilityTokenBucket {
                 lock.unlock();
             }
         }
+        //（126–131）：Lua 脚本单例
         DefaultRedisScript<String> actual = Singleton.get(LUA_TICKET_AVAILABILITY_TOKEN_BUCKET_PATH, () -> {
             DefaultRedisScript<String> redisScript = new DefaultRedisScript<>();
             redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(LUA_TICKET_AVAILABILITY_TOKEN_BUCKET_PATH)));
             redisScript.setResultType(String.class);
             return redisScript;
         });
+        //（133–143）：把乘客按席别归类
         Assert.notNull(actual);
         Map<Integer, Long> seatTypeCountMap = requestParam.getPassengers().stream()
                 .collect(Collectors.groupingBy(PurchaseTicketPassengerDetailDTO::getSeatType, Collectors.counting()));
@@ -137,6 +141,7 @@ public final class TicketAvailabilityTokenBucket {
                     return jsonObject;
                 })
                 .collect(Collectors.toCollection(JSONArray::new));
+        //（140–143）：算"重叠区间"，执行 Lua
         List<RouteDTO> takeoutRouteDTOList = trainStationService
                 .listTakeoutTrainStationRoute(requestParam.getTrainId(), requestParam.getDeparture(), requestParam.getArrival());
         String luaScriptKey = StrUtil.join("_", requestParam.getDeparture(), requestParam.getArrival());
@@ -153,6 +158,7 @@ public final class TicketAvailabilityTokenBucket {
      * @param requestParam 回滚列车余量令牌入参
      */
     public void rollbackInBucket(TicketOrderDetailRespDTO requestParam) {
+        //加载脚本（162–168）
         DefaultRedisScript<Long> actual = Singleton.get(LUA_TICKET_AVAILABILITY_ROLLBACK_TOKEN_BUCKET_PATH, () -> {
             DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
             redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(LUA_TICKET_AVAILABILITY_ROLLBACK_TOKEN_BUCKET_PATH)));
@@ -160,9 +166,11 @@ public final class TicketAvailabilityTokenBucket {
             return redisScript;
         });
         Assert.notNull(actual);
+        //统计要还多少（170–172）
         List<TicketOrderPassengerDetailRespDTO> passengerDetails = requestParam.getPassengerDetails();
         Map<Integer, Long> seatTypeCountMap = passengerDetails.stream()
                 .collect(Collectors.groupingBy(TicketOrderPassengerDetailRespDTO::getSeatType, Collectors.counting()));
+        //组装参数（174–184）
         JSONArray seatTypeCountArray = seatTypeCountMap.entrySet().stream()
                 .map(entry -> {
                     JSONObject jsonObject = new JSONObject();
@@ -174,7 +182,9 @@ public final class TicketAvailabilityTokenBucket {
         StringRedisTemplate stringRedisTemplate = (StringRedisTemplate) distributedCache.getInstance();
         String actualHashKey = TICKET_AVAILABILITY_TOKEN_BUCKET + requestParam.getTrainId();
         String luaScriptKey = StrUtil.join("_", requestParam.getDeparture(), requestParam.getArrival());
+        //算重叠区间(186)
         List<RouteDTO> takeoutRouteDTOList = trainStationService.listTakeoutTrainStationRoute(String.valueOf(requestParam.getTrainId()), requestParam.getDeparture(), requestParam.getArrival());
+        //执行 + 校验（188–192）
         Long result = stringRedisTemplate.execute(actual, Lists.newArrayList(actualHashKey, luaScriptKey), JSON.toJSONString(seatTypeCountArray), JSON.toJSONString(takeoutRouteDTOList));
         if (result == null || !Objects.equals(result, 0L)) {
             log.error("回滚列车余票令牌失败，订单信息：{}", JSON.toJSONString(requestParam));
