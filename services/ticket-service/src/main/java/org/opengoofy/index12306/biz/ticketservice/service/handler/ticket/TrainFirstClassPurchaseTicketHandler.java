@@ -61,6 +61,7 @@ public class TrainFirstClassPurchaseTicketHandler extends AbstractTrainPurchaseT
         return VehicleTypeEnum.HIGH_SPEED_RAIN.getName() + VehicleSeatTypeEnum.FIRST_CLASS.getName();
     }
 
+    //一等座选座
     @Override
     protected List<TrainPurchaseTicketRespDTO> selectSeats(SelectSeatDTO requestParam) {
         String trainId = requestParam.getRequestParam().getTrainId();
