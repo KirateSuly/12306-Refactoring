@@ -73,6 +73,7 @@ public class DelayCloseOrderConsumer implements RocketMQListener<MessageWrapper<
     @Value("${ticket.availability.cache-update.type:}")
     private String ticketAvailabilityCacheUpdateType;
 
+    //同一条消息消费两次时，第二次直接跳过。
     @Idempotent(
             uniqueKeyPrefix = "index12306-ticket:delay_close_order:",
             key = "#delayCloseOrderEventMessageWrapper.getKeys()+'_'+#delayCloseOrderEventMessageWrapper.hashCode()",
